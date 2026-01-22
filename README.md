@@ -12,7 +12,7 @@
   - **랜덤 지연 시간**: 동작 사이에 무작위 대기 시간을 주어 기계적인 패턴을 제거합니다.
   - **직접 이벤트 발송**: `evaluate`를 통해 브라우저 내부에서 클릭 이벤트를 강제 발생시켜 정확도를 높입니다.
 - **환경 변수 관리**: 모델 버전(`GEMINI_API_VERSION`)과 API 키를 `.env` 파일에서 간편하게 관리합니다.
-- **연속 처리 제어**: 설정된 수량(예: 2개)만큼 리뷰를 작성하고 안전하게 종료합니다.
+- **연속 처리 제어**: 설정된 수량만큼 리뷰를 작성하고 안전하게 종료합니다.
 
 ---
 
@@ -27,25 +27,24 @@ coupang-review-bot/
 ├── systemInstruction.txt   # Gemini 리뷰 작성 지침 (프롬프트)
 └── package.json            # 의존성 관리 파일
 ```
+아래는 요청하신 설치 및 설정과 사용 방법 섹션의 수정된 Markdown 내용입니다.
+
 ## 🛠️ 설치 및 설정
-1. 필수 패키지 설치
-사내 보안망 환경에서의 설치 오류를 방지하기 위해 SSL 검증을 우회하여 설치합니다.
+필수 패키지 설치 사내 보안망 환경에서의 설치 오류를 방지하기 위해 SSL 검증을 우회하여 설치합니다.
 
 ```Bash
-# SSL 검증 일시 해제 (필요시)
+# SSL 검증 일시 해제 (필수 아님)
 npm config set strict-ssl false
 
 # 의존성 설치
 npm install playwright @google/generative-ai dotenv
-2. 브라우저 설치
-인증서 오류가 발생할 경우 아래 명령어를 사용하세요.
+브라우저 설치 인증서 오류가 발생할 경우 아래 명령어를 사용하여 브라우저를 수동으로 설치하세요.
 ```
 
 ```Bash
 # Windows CMD 기준
 set NODE_TLS_REJECT_UNAUTHORIZED=0 && npx playwright install
-3. 환경 변수 설정 (.env)
-프로젝트 루트에 .env 파일을 생성하고 아래 내용을 입력합니다.
+환경 변수 설정 (.env) 프로젝트 루트에 .env 파일을 생성하고 아래 내용을 입력합니다.
 ```
 
 ```Plaintext
@@ -54,19 +53,35 @@ GEMINI_API_VERSION=gemini-2.0-flash-lite
 ```
 
 ## 🚀 사용 방법
-단계 1: 세션 저장 (최초 1회)
-브라우저를 열어 수동으로 로그인한 뒤 세션을 저장합니다. (디버깅 모드 활용 권장)
+1 단계: 크롬 디버깅 모드 실행 (필수)
+auth_setup.js는 실행 중인 브라우저의 원격 디버깅 포트에 접속하여 세션을 저장합니다. 모든 크롬 창을 닫은 뒤, 터미널에서 아래 명령어로 크롬을 실행하세요.
+
+Windows:
+```Bash
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+```
+
+macOS:
+```Bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+```
+
+2 단계: 세션 저장 (최초 1회)
+디버깅 모드로 열린 크롬 창에서 쿠팡에 접속하여 로그인을 완료합니다.
+
+로그인이 완료된 상태에서 프로젝트 터미널에 아래 스크립트를 실행합니다.
 
 ```Bash
 node auth_setup.js
+성공 시 루트 디렉토리에 auth.json 파일이 생성되며 인증 정보가 저장됩니다.
 ```
-단계 2: 자동화 실행
-Bash```
-node index.js
-```
-프로그램이 실행되면 설정된 targetLimit 수량만큼 리뷰를 순차적으로 작성합니다.
 
-각 상품 처리 후 아카마이 차단 방지를 위해 랜덤하게 휴식합니다.
+3 단계: 자동화 실행
+세션이 준비되면 아래 명령어로 리뷰 작성을 시작합니다.
+
+```Bash
+node index.js
+프로그램 실행 후 목표 수량을 입력하면 Gemini AI가 상품명에 맞춰 리뷰를 생성하고 자동으로 등록합니다. 각 상품 처리 사이에는 차단 방지를 위한 랜덤 휴식 시간이 포함됩니다.
 ```
 
 ## ⚠️ 주의 사항
