@@ -1,11 +1,15 @@
 // index.js
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; 
 
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-extra'); // playwright 대신 playwright-extra 사용
+const stealth = require('puppeteer-extra-plugin-stealth')();
 const fs = require('fs');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
+
+// Stealth 플러그인 등록
+chromium.use(stealth);
 
 const instructionPath = path.join(__dirname, 'systemInstruction.txt');
 const systemInstructionText = fs.readFileSync(instructionPath, 'utf8');
@@ -14,7 +18,6 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const targetLimit = parseInt(process.argv[2], 10) || 5; // 목표 처리 수
 
 // --- [인간 모사 헬퍼 함수들] ---
-
 const waitHumanLike = async (page, min = 1000, max = 3000) => {
     const timeout = Math.floor(Math.random() * (max - min + 1) + min);
     await page.waitForTimeout(timeout);
@@ -47,9 +50,9 @@ async function humanMoveAndClick(page, locator) {
     const context = await browser.newContext({ storageState: 'auth.json' });
     const page = await context.newPage();
 
-    let processedCount = 0; // 처리된 상품 수를 저장할 변수
+    let processedCount = 0;
 
-    console.log(`🚀 총 ${targetLimit}개의 상품 리뷰 작성을 시작합니다.`);
+    console.log(`🚀 [Stealth Mode] 총 ${targetLimit}개의 상품 리뷰 작성을 시작합니다.`);
 
     while (processedCount < targetLimit) {
         console.log(`\n🔄 [${processedCount + 1}/${targetLimit}] 리뷰 목록 불러오는 중...`);
@@ -64,8 +67,7 @@ async function humanMoveAndClick(page, locator) {
             break;
         }
 
-        const item = itemLocator;
-        const productName = await item.locator('.my-review__writable__content-title').innerText();
+        const productName = await itemLocator.locator('.my-review__writable__content-title').innerText();
         console.log(`📦 현재 처리 상품: ${productName}`);
 
         try {
@@ -81,7 +83,7 @@ async function humanMoveAndClick(page, locator) {
             console.log(`🤖 리뷰 생성 성공 (Model: ${modelName})`);
 
             // 2. 리뷰 작성 버튼 클릭
-            const writeButton = item.locator('button:has-text("리뷰 작성하기")');
+            const writeButton = itemLocator.locator('button:has-text("리뷰 작성하기")');
             await humanMoveAndClick(page, writeButton);
             
             // 3. 모달 내 별점/설문 처리
@@ -98,20 +100,17 @@ async function humanMoveAndClick(page, locator) {
                     if (radios && radios[1]) radios[1].click();
                 });
             });
-            console.log('⭐ 별점 및 설문 선택 완료');
 
-            // 4. 리뷰 텍스트 입력
             const textareaSelector = 'textarea.my-review__modify__review__content__text-area';
-            // await page.fill(textareaSelector, reviewText);
-            const textarea = page.locator(textareaSelector);
-            await textarea.focus();
-            await page.keyboard.type(reviewText, { delay: Math.random() * 50 + 50 }); // 글자당 50~100ms 지연
-
-            console.log('✍️ 리뷰 텍스트 입력 완료');
             
+            // 4. 리뷰 텍스트 입력
+            // 더 사람처럼 보이게 하기 위해 fill 대신 한 글자씩 타이핑
+            await page.locator(textareaSelector).focus();
+            await page.keyboard.type(reviewText, { delay: Math.random() * 50 + 50 });
+            
+            console.log('✍️ 리뷰 텍스트 입력 완료');
             await waitHumanLike(page, 3000, 6000); 
 
-            // 5. 등록 버튼 클릭
             const submitSelector = 'button.submit-button._review-submit';
             const submitButton = page.locator(submitSelector);
             
@@ -120,25 +119,23 @@ async function humanMoveAndClick(page, locator) {
                 if (btn) btn.disabled = false;
             }, submitSelector);
 
-            console.log('🚀 등록 버튼 클릭...');
             await humanMoveAndClick(page, submitButton);
 
-            processedCount++; // 성공 시 카운트 증가
-            console.log(`✅ ${productName} 등록 완료! (현재 ${processedCount}개 완료)`);
+            processedCount++;
+            console.log(`✅ ${productName} 등록 완료!`);
 
             if (processedCount < targetLimit) {
                 const restTime = Math.floor(Math.random() * 10000 + 20000); 
-                console.log(`💤 다음 상품 전 ${restTime/1000}초간 대기합니다...`);
+                console.log(`💤 다음 상품 전 ${restTime/1000}초간 대기...`);
                 await page.waitForTimeout(restTime);
             }
 
         } catch (error) {
             console.error(`❌ 오류 발생:`, error);
-            console.log('안전을 위해 10초 대기 후 다음 시도를 진행합니다.');
             await page.waitForTimeout(10000);
         }
     }
 
-    console.log(`\n🎉 목표 수량(${targetLimit}개)을 모두 달성했습니다.`);
+    console.log(`\n🎉 목표 수량(${targetLimit}개)을 완료했습니다.`);
     await browser.close();
 })();
