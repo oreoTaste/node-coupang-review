@@ -56,22 +56,30 @@ async function humanMoveAndClick(page, locator) {
 
     while (processedCount < targetLimit) {
         console.log(`\n🔄 [${processedCount + 1}/${targetLimit}] 리뷰 목록 불러오는 중...`);
-        await page.goto('https://my.coupang.com/productreview/reviewable');
-        await waitHumanLike(page, 2000, 4000);
-
-        const itemLocator = page.locator('.my-review__writable__list').first();
-        const itemCount = await itemLocator.count();
-
-        if (itemCount === 0) {
-            console.log('✅ 더 이상 작성할 리뷰가 없습니다.');
-            break;
-        }
-
-        const productName = await itemLocator.locator('.my-review__writable__content-title').innerText();
-        console.log(`📦 현재 처리 상품: ${productName}`);
-
         try {
-            // 1. Gemini 리뷰 생성 (환경변수 모델 사용)
+            await page.goto('https://my.coupang.com/productreview/reviewable', { waitUntil: 'domcontentloaded' });
+            
+            // 셀렉터 안정성: 목록 요소가 나타날 때까지 최대 10초 대기
+            const listSelector = '.my-review__writable__list';
+            await page.waitForSelector(listSelector, { state: 'visible', timeout: 10000 });
+            await waitHumanLike(page, 2000, 4000);
+
+            const itemLocator = page.locator(listSelector).first();
+            const itemCount = await itemLocator.count();
+
+            if (itemCount === 0) {
+                console.log('✅ 더 이상 작성할 리뷰가 없습니다.');
+                break;
+            }
+
+            // 안정성: 요소 존재 여부 확인 후 상품명 추출
+            const titleLocator = itemLocator.locator('.my-review__writable__content-title');
+            if (await titleLocator.count() === 0) throw new Error("상품명을 찾을 수 없습니다.");
+            
+            const productName = await titleLocator.innerText();
+            console.log(`📦 현재 처리 상품: ${productName}`);
+
+            // 1. Gemini 리뷰 생성 로직 (기존과 동일)
             const modelName = process.env.GEMINI_API_VERSION || "gemini-2.0-flash";
             const model = genAI.getGenerativeModel({ 
                 model: modelName, 
@@ -80,40 +88,49 @@ async function humanMoveAndClick(page, locator) {
 
             const result = await model.generateContent(`상품명 '${productName}'에 대한 리뷰를 작성해줘.`);
             const reviewText = result.response.text();
-            console.log(`🤖 리뷰 생성 성공 (Model: ${modelName})`);
+            console.log(`🤖 리뷰 생성 성공`);
 
             // 2. 리뷰 작성 버튼 클릭
             const writeButton = itemLocator.locator('button:has-text("리뷰 작성하기")');
             await humanMoveAndClick(page, writeButton);
             
-            // 3. 모달 내 별점/설문 처리
-            await page.waitForSelector('.my-review__modify__star__content__value', { state: 'visible' });
+            // 3. 모달 내 별점/설문 처리 (랜덤 로직 적용)
+            const starValueSelector = '.my-review__modify__star__content__value';
+            await page.waitForSelector(starValueSelector, { state: 'visible', timeout: 5000 });
             await waitHumanLike(page, 1500, 2500);
 
             await page.evaluate(() => {
+                // 별점 랜덤 선택 (인덱스 3: 4점, 인덱스 4: 5점)
                 const stars = document.querySelectorAll(".my-review__modify__star__content__value");
-                if (stars && stars[4]) stars[4].click();
+                if (stars && stars.length >= 5) {
+                    const randomStarIdx = Math.random() < 0.35 ? 3 : 4; 
+                    stars[randomStarIdx].click();
+                }
 
+                // 설문 라디오 버튼 랜덤 선택 (인덱스 0: 첫번째, 인덱스 1: 두번째)
                 const surveys = document.querySelectorAll('.review-intake-form__check-options .radio-survey');
                 surveys.forEach(survey => {
                     const radios = survey.querySelectorAll('input[type="radio"]');
-                    if (radios && radios[1]) radios[1].click();
+                    if (radios && radios.length >= 2) {
+                        const randomRadioIdx = Math.random() < 0.42 ? 0 : 1;
+                        radios[randomRadioIdx].click();
+                    }
                 });
             });
 
+            // 4. 리뷰 텍스트 입력 및 제출
             const textareaSelector = 'textarea.my-review__modify__review__content__text-area';
-            
-            // 4. 리뷰 텍스트 입력
-            // 더 사람처럼 보이게 하기 위해 fill 대신 한 글자씩 타이핑
+            await page.waitForSelector(textareaSelector, { state: 'visible' });
             await page.locator(textareaSelector).focus();
             await page.keyboard.type(reviewText, { delay: Math.random() * 50 + 50 });
             
             console.log('✍️ 리뷰 텍스트 입력 완료');
-            await waitHumanLike(page, 3000, 6000); 
+            await waitHumanLike(page, 2000, 4000); 
 
             const submitSelector = 'button.submit-button._review-submit';
             const submitButton = page.locator(submitSelector);
             
+            // 제출 버튼 활성화 및 클릭
             await page.evaluate((sel) => {
                 const btn = document.querySelector(sel);
                 if (btn) btn.disabled = false;
@@ -124,15 +141,17 @@ async function humanMoveAndClick(page, locator) {
             processedCount++;
             console.log(`✅ ${productName} 등록 완료!`);
 
+            // 다음 작업을 위한 안전 대기
             if (processedCount < targetLimit) {
-                const restTime = Math.floor(Math.random() * 10000 + 20000); 
+                const restTime = Math.floor(Math.random() * 10000 + 15000); 
                 console.log(`💤 다음 상품 전 ${restTime/1000}초간 대기...`);
                 await page.waitForTimeout(restTime);
             }
 
         } catch (error) {
-            console.error(`❌ 오류 발생:`, error);
-            await page.waitForTimeout(10000);
+            console.error(`❌ [${processedCount + 1}번째 상품] 처리 중 오류 발생:`, error.message);
+            // 오류 발생 시 잠시 대기 후 다음 시도로 넘어감
+            await page.waitForTimeout(5000);
         }
     }
 
