@@ -11,6 +11,7 @@ const instructionPath = path.join(__dirname, 'systemInstruction.txt');
 const systemInstructionText = fs.readFileSync(instructionPath, 'utf8');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const targetLimit = parseInt(process.argv[2], 10) || 5; // 목표 처리 수
 
 // --- [인간 모사 헬퍼 함수들] ---
 
@@ -47,7 +48,6 @@ async function humanMoveAndClick(page, locator) {
     const page = await context.newPage();
 
     let processedCount = 0; // 처리된 상품 수를 저장할 변수
-    const targetLimit = 5;  // 목표 처리 수
 
     console.log(`🚀 총 ${targetLimit}개의 상품 리뷰 작성을 시작합니다.`);
 
@@ -102,7 +102,11 @@ async function humanMoveAndClick(page, locator) {
 
             // 4. 리뷰 텍스트 입력
             const textareaSelector = 'textarea.my-review__modify__review__content__text-area';
-            await page.fill(textareaSelector, reviewText);
+            // await page.fill(textareaSelector, reviewText);
+            const textarea = page.locator(textareaSelector);
+            await textarea.focus();
+            await page.keyboard.type(reviewText, { delay: Math.random() * 50 + 50 }); // 글자당 50~100ms 지연
+
             console.log('✍️ 리뷰 텍스트 입력 완료');
             
             await waitHumanLike(page, 3000, 6000); 
