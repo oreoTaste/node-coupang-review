@@ -53,36 +53,29 @@ GEMINI_API_VERSION=gemini-2.0-flash-lite
 ```
 
 ## 🚀 사용 방법
-1 단계: 크롬 디버깅 모드 실행 (필수)
-auth_setup.js는 실행 중인 브라우저의 원격 디버깅 포트에 접속하여 세션을 저장합니다. 모든 크롬 창을 닫은 뒤, 터미널에서 아래 명령어로 크롬을 실행하세요.
+1단계: 크롬 종료 및 디버깅 모드 실행
+가장 중요한 단계입니다. 기존의 모든 크롬 창이 닫혀 있어야 디버깅 포트(9222)가 정상적으로 열립니다.
 
-Windows:
-```Bash
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
-```
-
-macOS:
-```Bash
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
-```
-
-2 단계: 세션 저장 (최초 1회)
-디버깅 모드로 열린 크롬 창에서 쿠팡에 접속하여 로그인을 완료합니다.
-
-로그인이 완료된 상태에서 프로젝트 터미널에 아래 스크립트를 실행합니다.
+1. 모든 크롬 종료: CMD창에 아래 명령어를 입력하여 잔류 프로세스를 제거합니다.
 
 ```Bash
-node auth_setup.js
-성공 시 루트 디렉토리에 auth.json 파일이 생성되며 인증 정보가 저장됩니다.
+taskkill /F /IM chrome.exe /T
 ```
 
-3 단계: 자동화 실행
-세션이 준비되면 아래 명령어로 리뷰 작성을 시작합니다.
-
+2. 디버깅 모드로 실행: 아래 명령어를 복사하여 크롬을 실행합니다. (독립된 데이터 경로를 사용하여 충돌을 방지합니다.)
 ```Bash
-node index.js
-프로그램 실행 후 목표 수량을 입력하면 Gemini AI가 상품명에 맞춰 리뷰를 생성하고 자동으로 등록합니다. 각 상품 처리 사이에는 차단 방지를 위한 랜덤 휴식 시간이 포함됩니다.
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\temp\chrome_debug" --no-first-run
 ```
+
+2단계: 쿠팡 로그인
+새로 열린 크롬 창에서 쿠팡에 접속하여 로그인을 완료합니다. 마이쿠팡 페이지까지 이동하여 세션이 활성화된 것을 확인하세요.
+
+3단계: 통합 실행 (start.bat)
+이제 모든 준비가 끝났습니다. 프로젝트 폴더 내의 start.bat을 실행합니다.
+
+- STEP 1 (인증): auth_setup.js가 기존 세션을 확인하거나 9222 포트에 연결하여 auth.json을 갱신합니다.
+- STEP 2 (자동화): 인증이 완료되면 목표 리뷰 개수를 입력받아 리뷰 작성을 시작합니다.
+
 
 ## ⚠️ 주의 사항
 ```
