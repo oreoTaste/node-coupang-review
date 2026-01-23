@@ -1,72 +1,71 @@
 import os
-import json
-from playwright.sync_api import sync_playwright
-import os
 import sys
+from playwright.sync_api import sync_playwright
 
-# [핵심 추가] Playwright가 임시 폴더가 아닌 시스템 전역 브라우저 경로를 사용하게 함
+# Playwright 브라우저 경로 설정
 if getattr(sys, 'frozen', False):
-    # EXE로 실행 중일 때
     os.environ['PLAYWRIGHT_BROWSERS_PATH'] = '0'
 
 AUTH_PATH = 'auth.json'
 
 def check_login_status(page):
     try:
-        # 주문 목록 페이지 접속 시도
+        # 주문 목록 페이지 접속 시도하여 로그인 여부 확인
         page.goto('https://my.coupang.com/purchase/list', wait_until='domcontentloaded', timeout=10000)
-        # 로그인 페이지로 리다이렉트 되었는지 확인
         return 'login.coupang.com' not in page.url
     except:
         return False
 
-def run_setup():
+def check_session():
+    """기존 auth.json 세션의 유효성을 검사합니다."""
+    if not os.path.exists(AUTH_PATH):
+        return False
     with sync_playwright() as p:
-        # 1. 기존 세션 유효성 확인
-        if os.path.exists(AUTH_PATH):
-            print(f"\n[LOG] '{AUTH_PATH}' 파일을 확인 중...")
+        try:
             browser = p.chromium.launch(headless=True, channel="chrome")
             context = browser.new_context(storage_state=AUTH_PATH)
             page = context.new_page()
-            
-            if check_login_status(page):
-                print("✅ 기존 세션이 유효합니다.")
-                browser.close()
-                return
-            print("⚠️ 세션이 만료되었습니다.")
+            is_valid = check_login_status(page)
             browser.close()
+            return is_valid
+        except:
+            return False
 
-        # 2. 안내 메시지
-        print("\n" + "="*60)
-        print("🔐 쿠팡 로그인 인증 설정")
-        print("="*60)
-        print("1. 모든 크롬 창을 닫으세요.")
-        print("2. [윈도우+R] -> 아래 명령어 입력:")
-        print("   chrome.exe --remote-debugging-port=9222 --user-data-dir=\"C:\\temp\\chrome_debug\"")
-        print("3. 크롬에서 로그인 후 엔터를 누르세요.")
-        print("="*60)
-        
-        input("\n👉 로그인을 완료했다면 [엔터]를 눌러주세요...")
-
-        # 3. CDP 연결 및 저장
+def save_session():
+    """디버깅 포트로 열린 브라우저에 연결하여 인증 정보를 저장합니다."""
+    with sync_playwright() as p:
         try:
-            print("\n[연결] 브라우저에 접속 중...")
+            print("\n[연결] 실행 중인 브라우저에 접속 시도 중...")
             browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
             default_context = browser.contexts[0]
-            
-            # 쿠팡 페이지로 이동하여 최종 확인
             page = default_context.pages[0] if default_context.pages else default_context.new_page()
             page.goto("https://www.coupang.com/")
             
+            # 로그아웃 버튼이 있거나 세션 체크를 통과하면 저장
             if '로그아웃' in page.content() or check_login_status(page):
                 default_context.storage_state(path=AUTH_PATH)
-                print(f"✅ 인증 정보 저장 완료! ({AUTH_PATH})")
-            else:
-                print("❌ 실패: 로그인이 감지되지 않았습니다.")
-            
+                browser.close()
+                return True
             browser.close()
+            return False
         except Exception as e:
-            print(f"\n❌ 연결 실패: {e}")
+            print(f"❌ 연결 실패: {e}")
+            return False
 
 if __name__ == "__main__":
-    run_setup()
+    # 'save' 인자가 전달되면 인증 정보 저장 모드로 동작
+    if len(sys.argv) > 1 and sys.argv[1] == "save":
+        if save_session():
+            print(f"✅ 인증 정보 저장 완료! ({AUTH_PATH})")
+            sys.exit(0)
+        else:
+            print("❌ 실패: 로그인이 감지되지 않았습니다.")
+            sys.exit(1)
+    # 인자가 없으면 단순 세션 체크만 수행
+    else:
+        if check_session():
+            print("✅ 기존 세션이 유효합니다.")
+            sys.exit(0)
+        else:
+            print("⚠️ 세션이 만료되었거나 정보가 없습니다.")
+            sys.exit(1)

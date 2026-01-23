@@ -1,10 +1,41 @@
 @echo off
-echo STEP 1: ì‚¬ìš©ì ì¸ì¦ í™•ì¸
+echo STEP 1: »ç¿ëÀÚ ÀÎÁõ È®ÀÎ Áß...
+
+:: 1. ¸ÕÀú ±âÁ¸ ¼¼¼ÇÀÌ À¯È¿ÇÑÁö Ã¼Å© (ÀÎÀÚ ¾øÀÌ ½ÇÇà)
 python auth_setup.py
-if %errorlevel% neq 0 exit /b
+if %errorlevel% equ 0 (
+    echo ±âÁ¸ ¼¼¼ÇÀÌ À¯È¿ÇÏ¹Ç·Î ¹Ù·Î ½ÃÀÛÇÕ´Ï´Ù.
+    goto RUN_INDEX
+)
 
 echo.
-echo STEP 2: ìë™í™” ì‹œì‘
-set /p limit="ëª©í‘œ ê°œìˆ˜: "
+echo ? ·Î±×ÀÎÀÌ ÇÊ¿äÇÕ´Ï´Ù.
+echo ----------------------------------------------------
+echo 1. ÇöÀç ¿­·Á ÀÖ´Â ¸ğµç Å©·Ò Ã¢À» ¿ÏÀüÈ÷ Á¾·áÇØÁÖ¼¼¿ä.
+echo 2. Àá½Ã ÈÄ µğ¹ö±ë ¸ğµå·Î Å©·ÒÀÌ ÀÚµ¿ ½ÇÇàµË´Ï´Ù.
+echo ----------------------------------------------------
+pause
+
+:: 2. µğ¹ö±ë ¸ğµå·Î Å©·Ò ½ÇÇà
+start chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\temp\chrome_debug"
+
+echo.
+echo 3. »õ·Î ¿­¸° Å©·Ò Ã¢¿¡¼­ ÄíÆÎ ·Î±×ÀÎÀ» ¿Ï·áÇØ ÁÖ¼¼¿ä.
+set /p dummy="? ·Î±×ÀÎÀ» ¿Ï·áÇß´Ù¸é ÀÌ Ã¢¿¡¼­ [¿£ÅÍ]¸¦ ´­·¯ÁÖ¼¼¿ä..."
+
+:: 3. ·Î±×ÀÎµÈ ºê¶ó¿ìÀú¿¡¼­ ÀÎÁõ Á¤º¸¸¦ ÃßÃâÇÏ¿© ÀúÀå (save ÀÎÀÚ Àü´Ş)
+echo ÀÎÁõ Á¤º¸ ÀúÀå ½Ãµµ Áß...
+python auth_setup.py save
+if %errorlevel% neq 0 (
+    echo.
+    echo ? ÀÎÁõ ÀúÀå¿¡ ½ÇÆĞÇß½À´Ï´Ù. ·Î±×ÀÎÀÌ Á¦´ë·Î µÇ¾ú´ÂÁö È®ÀÎ ÈÄ ´Ù½Ã ½ÃµµÇØÁÖ¼¼¿ä.
+    pause
+    exit /b
+)
+
+:RUN_INDEX
+echo.
+echo STEP 2: ÀÚµ¿È­ ½ÃÀÛ
+set /p limit="¸ñÇ¥ °³¼ö(¼ıÀÚ): "
 python index.py %limit%
 pause

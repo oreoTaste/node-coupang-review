@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import ssl
 import time
@@ -73,14 +74,6 @@ api_keys = [
 # None 값(설정 안 된 키) 제외 필터링
 valid_keys = [k for k in api_keys if k]
 
-# 랜덤하게 하나 선택
-if valid_keys:
-    genai.configure(
-        api_key=random.choice(valid_keys),
-        transport='rest'
-    )
-else:
-    print("❌ 오류: 설정된 API 키가 없습니다.")
 
 
 # 시스템 지시문 로드
@@ -132,15 +125,31 @@ def run_automation(target_limit):
                 product_name = item.locator('.my-review__writable__content-title').inner_text().strip()
                 print(f"📦 상품명: {product_name}")
 
+                # gemini API키 랜덤하게 하나 선택
+                if valid_keys:
+                    genai.configure(
+                        api_key=random.choice(valid_keys),
+                        transport='rest'
+                    )
+                else:
+                    print("❌ 오류: 설정된 API 키가 없습니다.")
+
                 # Gemini 리뷰 생성
                 model = genai.GenerativeModel(
-                    model_name=os.getenv("GEMINI_API_VERSION", "gemini-2.0-flash"),
+                    model_name=os.getenv("GEMINI_API_VERSION", "gemini-2.5-flash-lite"),
                     system_instruction=system_instruction
                 )
                 response = model.generate_content(f"상품명 '{product_name}'에 대한 리뷰를 작성해줘.")
 
-                # HTML 엔티티를 일반 문자로 변환 (예: &#39; -> ')
-                review_text = html.unescape(response.text.replace('```', '').strip())
+                # 1. 마크다운 코드 블록(```) 및 언어 이름(python, html 등) 제거
+                cleaned_text = re.sub(r'```[a-zA-Z]*\n?', '', response.text).strip()
+
+                # 2. HTML 엔티티 변환 (한 번 더 확실하게 실행)
+                review_text = html.unescape(cleaned_text)
+
+                # 3. 혹시 모를 잔여 엔티티 직접 치환 (안전장치)
+                review_text = review_text.replace('&#39;', "'").replace('&quot;', '"')
+
                 print("🤖 리뷰 생성 성공")
 
                 # 리뷰 작성 프로세스
@@ -158,13 +167,40 @@ def run_automation(target_limit):
                     if radios.count() >= 2:
                         radios.nth(0 if random.random() < 0.4 else 1).click(force=True)
 
-                # 텍스트 입력 및 제출
+                # 텍스트 입력 및 제출 부분 수정
                 textarea = page.locator('textarea.my-review__modify__review__content__text-area')
-                textarea.press_sequentially(review_text, delay=random.randint(50, 150))
+
+                # 1. 엘리먼트가 보일 때까지 명시적으로 기다림
+                textarea.wait_for(state="visible", timeout=10000)
+
+                # 2. 스크롤을 이동시키고 강제로 클릭하여 포커스를 잡음
+                textarea.scroll_into_view_if_needed()
+                textarea.click() 
+
+                # 3. 입력 시도
+                try:
+                    textarea.press_sequentially(review_text, delay=random.randint(30, 80), timeout=120000)
+                except Exception as e:
+                    print(f"⚠️ 일반 입력 실패로 fill() 방식을 시도합니다: {e}")
+                    # press_sequentially가 계속 실패할 경우를 대비한 백업 (더 빠르고 확실함)
+                    textarea.fill(review_text)
+
                 wait_human_like(2, 5)
 
+                # 3. [중요] 실제 입력 여부 검증
+                # 입력된 값이 비어있다면 fill()로 강제 입력합니다.
+                if not textarea.input_value().strip():
+                    print("❌ 입력 확인 실패: 내용을 다시 채웁니다.")
+                    textarea.fill(review_text)
+                    wait_human_like(1, 2)
+
+                # 4. 제출 버튼 활성화 및 클릭
                 page.evaluate("document.querySelector('button.submit-button._review-submit').disabled = false")
-                page.locator('button.submit-button._review-submit').click()
+                submit_btn = page.locator('button.submit-button._review-submit')
+                
+                # 버튼이 클릭 가능할 때까지 대기 후 클릭
+                submit_btn.wait_for(state="visible")
+                submit_btn.click()
 
                 processed_count += 1
                 print(f"✅ {product_name} 등록 완료!")
